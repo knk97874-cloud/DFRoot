@@ -174,6 +174,30 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         # 3. Multi-manager support list
         self.assertIn("KNOWN_MANAGER_PKGS", self.ksu_manager_java)
 
+    def test_09_unverified_marker_and_independent_prerequisite_reporting(self):
+        """
+        Inspect KernelSuManager.java to verify:
+        1. Does not claim /dev/df confirms 'kernel hook active' (avoiding overclaiming
+           unverified kernel functionality from raw filesystem markers).
+        2. Accurately reports /dev/df as an unverified marker requiring reboot to clear.
+        3. Defines hasSelectableSuManager aligning diagnostic button calculation with
+           MainActivity and ExploitRunner libksud.so requirements.
+        4. Reports missing prerequisites independently even if /dev/df is present.
+        """
+        # 1. No ungrounded 'kernel hook active' claim
+        self.assertNotIn("(kernel hook active)", self.ksu_manager_java,
+                         "KernelSuManager must not claim /dev/df proves active kernel hooks")
+
+        # 2. Unverified marker qualification
+        self.assertIn("Marker: /dev/df present (prior hook attempt or unverified filesystem marker",
+                      self.ksu_manager_java)
+
+        # 3. Method alignment with MainActivity
+        self.assertIn("hasSelectableSuManager", self.ksu_manager_java)
+
+        # 4. Independent prerequisite checking
+        self.assertIn("if (!hasSelectableManager && !hasBundled)", self.ksu_manager_java)
+
 
 if __name__ == "__main__":
     unittest.main()
