@@ -78,6 +78,13 @@ public class KernelSuManager {
     }
 
     /**
+     * Checks if DFRoot can operate in self-contained manager mode using bundled daemons.
+     */
+    public static boolean isSelfManaged(Context ctx) {
+        return hasBundledStandardKsud(ctx) || hasBundledSamsungKsud(ctx) || hasBundledKsud(ctx);
+    }
+
+    /**
      * Diagnostic-only reporting for packaged KernelSU CLI binaries.
      * Clearly distinguishes:
      * 1. Binary packaged status

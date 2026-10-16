@@ -103,6 +103,9 @@ public class MainActivity extends Activity implements IReporter {
         String placeholder;
         if (!entries.isEmpty()) {
             placeholder = "Select a SU Manager";
+            if (hasBundledStd || hasBundledSam) {
+                placeholder = "Self-Contained KernelSU Engine";
+            }
         } else {
             String installedPkg = KernelSuManager.getInstalledExternalManagerPackage(this);
             if (installedPkg != null) {

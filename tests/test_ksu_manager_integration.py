@@ -78,7 +78,7 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         3. 'Runtime Integration: INCOMPLETE'
         """
         self.assertIn("reportBundledDiagnostics", self.ksu_manager_java,
-                      "KernelSuManager.java must define reportBundledDiagnostics")
+                       "KernelSuManager.java must define reportBundledDiagnostics")
 
         # 1. Binary packaged distinction
         self.assertIn('* Standard Variant (libksud_standard.so): " + (hasStandard ? "PACKAGED (PRESENT)" : "ABSENT")',
@@ -156,9 +156,9 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         """
         Inspect AndroidManifest.xml and KernelSuManager.java to verify:
         1. AndroidManifest.xml declares <queries> with me.weishu.kernelsu to guarantee
-        package visibility on Android 11+ (API 30+) devices.
+           package visibility on Android 11+ (API 30+) devices.
         2. KernelSuManager.reportBundledDiagnostics explicitly communicates disabled
-        button status and lists exact missing prerequisites.
+           button status and lists exact missing prerequisites.
         3. KernelSuManager defines KNOWN_MANAGER_PKGS supporting upstream and alternative managers.
         """
         # 1. Package visibility declaration in manifest
@@ -179,10 +179,10 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         """
         Inspect KernelSuManager.java to verify:
         1. Does not claim /dev/df confirms 'kernel hook active' (avoiding overclaiming
-        unverified kernel functionality from raw filesystem markers).
+           unverified kernel functionality from raw filesystem markers).
         2. Accurately reports /dev/df as an unverified marker requiring reboot to clear.
         3. Defines hasSelectableSuManager aligning diagnostic button calculation with
-        MainActivity and ExploitRunner libksud.so requirements.
+           MainActivity and ExploitRunner libksud.so requirements.
         4. Reports missing prerequisites independently even if /dev/df is present.
         """
         # 1. No ungrounded 'kernel hook active' claim
@@ -191,7 +191,7 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
 
         # 2. Unverified marker qualification
         self.assertIn("Marker: /dev/df present (prior hook attempt or unverified filesystem marker",
-                      self.ksu_manager_java)
+                       self.ksu_manager_java)
 
         # 3. Method alignment with MainActivity
         self.assertIn("hasSelectableSuManager", self.ksu_manager_java)
@@ -279,6 +279,21 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         # 4. MainActivity UI mapping
         self.assertIn('rc == ExploitRunner.RC_STAGED_DECOUPLED ? "DFRoot: Staged (Exploitation Decoupled)"', self.main_activity_java)
         self.assertIn('if (rc == ExploitRunner.RC_SUCCESS)', self.main_activity_java)
+
+    def test_13_self_contained_single_app_zero_external_apk_contract(self):
+        """
+        Verify:
+        1. ExploitRunner sets PREF_SU_MANAGER to ctx.getPackageName() (df.root) on bundled staging,
+           guaranteeing zero external APK requirement.
+        2. ExploitRunner logs Self-Contained All-in-One Mode.
+        3. KernelSuManager defines isSelfManaged helper.
+        4. MainActivity provides 'Self-Contained KernelSU Engine' dropdown placeholder.
+        """
+        self.assertIn("prefs.edit().putString(PREF_SU_MANAGER, ctx.getPackageName()).apply();",
+                      self.exploit_runner_java)
+        self.assertIn("Self-Contained All-in-One Mode", self.exploit_runner_java)
+        self.assertIn("public static boolean isSelfManaged(Context ctx)", self.ksu_manager_java)
+        self.assertIn("Self-Contained KernelSU Engine", self.main_activity_java)
 
 
 if __name__ == "__main__":
