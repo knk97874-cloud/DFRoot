@@ -31,6 +31,8 @@ import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
+import df.root.ksu.KernelSuManager;
+
 public class MainActivity extends Activity implements IReporter {
 
     private static final String TAG = "dfroot";
@@ -131,17 +133,24 @@ public class MainActivity extends Activity implements IReporter {
     }
 
     private void updateRunButton() {
-        btnRun.setEnabled(mValidSuManagerPos >= 1 && !new File("/dev/df").exists());
+        // Enable if either an external manager is selected OR bundled ksud is available
+        boolean canRun = (mValidSuManagerPos >= 1 || KernelSuManager.hasBundledKsud(this));
+        btnRun.setEnabled(canRun && !new File("/dev/df").exists());
     }
 
     private void runExploit() {
         try {
             int rc = ExploitRunner.run(mDeCtx, this);
             String msg = rc == 0 ? "DFRoot: SUCCESS"
-                       : rc == 1 ? "DFRoot: Error - ksud nonzero exit"
-                       : rc == 2 ? "DFRoot: Error - check logcat & dmesg"
-                       : "DFRoot: Error - failed to patch files";
+                         : rc == 1 ? "DFRoot: Error - ksud nonzero exit"
+                         : rc == 2 ? "DFRoot: Error - check logcat & dmesg"
+                         : "DFRoot: Error - failed to patch files";
             mMain.post(() -> Toast.makeText(this, msg, Toast.LENGTH_LONG).show());
+
+            if (rc == 0) {
+                // Execute supported KernelSU manager operations in the background
+                KernelSuManager.getInstance().executeBackgroundManagerSync(mDeCtx, this);
+            }
         } catch (Exception e) {
             Log.e(TAG, "exploit exception", e);
             report("\nexception: " + e + "\n");

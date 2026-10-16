@@ -55,3 +55,8 @@ set_target_properties(bootstrap PROPERTIES
     SUFFIX ".so"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 target_link_options(bootstrap PRIVATE -Wl,-z,max-page-size=16384)
+
+# KernelSU Manager JNI interface library
+add_library(ksu_jni SHARED ksu_jni.c)
+target_link_libraries(ksu_jni log)
+target_link_options(ksu_jni PRIVATE -Wl,-z,max-page-size=16384)
