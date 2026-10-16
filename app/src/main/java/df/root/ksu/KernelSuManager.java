@@ -16,6 +16,11 @@ public class KernelSuManager {
     public static final String BUNDLED_KSUD_LIB = "libksud.so";
     public static final String BUNDLED_KSUD_STANDARD_LIB = "libksud_standard.so";
     public static final String BUNDLED_KSUD_SAMSUNG_LIB = "libksud_samsung.so";
+    public static final String[] KNOWN_MANAGER_PKGS = {
+        UPSTREAM_MANAGER_PKG,
+        "io.github.a13e300.ksu",
+        "me.bmax.apatch"
+    };
 
     public enum Status {
         NOT_ROOTED,
@@ -87,19 +92,38 @@ public class KernelSuManager {
         reporter.report("* Samsung Variant (libksud_samsung.so): " + (hasSamsung ? "PACKAGED (PRESENT)" : "ABSENT") + "\n");
         reporter.report("  - Compatibility: UNKNOWN (requires authoritative kernel driver verification)\n");
         reporter.report("* Runtime Integration: INCOMPLETE (selection & staging decoupled pending driver identification)\n");
-        reporter.report("* Status: Diagnostic-only mode. Neither binary is staged or selected.\n\n");
+        reporter.report("* Status: Diagnostic-only mode. Neither binary is staged or selected.\n");
+
+        boolean hasExternalManager = isExternalManagerInstalled(ctx);
+        boolean hasBundled = hasBundledKsud(ctx);
+        boolean isHooked = new File("/dev/df").exists();
+
+        reporter.report("* Launch Root Button: " + ((hasExternalManager || hasBundled) && !isHooked ? "ENABLED" : "DISABLED") + "\n");
+        if (isHooked) {
+            reporter.report("  - Prerequisite: /dev/df already exists (kernel hook active)\n");
+        } else if (!hasExternalManager && !hasBundled) {
+            reporter.report("  - Prerequisites missing:\n");
+            reporter.report("    1. External SU Manager (me.weishu.kernelsu) is NOT installed\n");
+            reporter.report("    2. Bundled binaries are for diagnostic detection only, not staged into runtime path\n");
+            reporter.report("  - Action Required: Install an external SU Manager APK or stage a verified binary\n");
+        }
+        reporter.report("\n");
     }
 
     /**
-     * Checks if the official external KernelSU Manager app is installed.
+     * Checks if a supported external KernelSU Manager app is installed.
      */
     public boolean isExternalManagerInstalled(Context ctx) {
-        try {
-            ctx.getPackageManager().getApplicationInfo(UPSTREAM_MANAGER_PKG, 0);
-            return true;
-        } catch (PackageManager.NameNotFoundException e) {
-            return false;
+        if (ctx == null) return false;
+        PackageManager pm = ctx.getPackageManager();
+        if (pm == null) return false;
+        for (String pkg : KNOWN_MANAGER_PKGS) {
+            try {
+                pm.getApplicationInfo(pkg, 0);
+                return true;
+            } catch (PackageManager.NameNotFoundException ignored) {}
         }
+        return false;
     }
 
     /**
