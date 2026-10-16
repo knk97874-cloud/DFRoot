@@ -14,6 +14,8 @@ public class KernelSuManager {
     private static final String TAG = "KernelSuManager";
     public static final String UPSTREAM_MANAGER_PKG = "me.weishu.kernelsu";
     public static final String BUNDLED_KSUD_LIB = "libksud.so";
+    public static final String BUNDLED_KSUD_STANDARD_LIB = "libksud_standard.so";
+    public static final String BUNDLED_KSUD_SAMSUNG_LIB = "libksud_samsung.so";
 
     public enum Status {
         NOT_ROOTED,
@@ -46,6 +48,42 @@ public class KernelSuManager {
         ApplicationInfo ai = ctx.getApplicationInfo();
         if (ai == null || ai.nativeLibraryDir == null) return false;
         return new File(ai.nativeLibraryDir, BUNDLED_KSUD_LIB).exists();
+    }
+
+    /**
+     * Checks if DFRoot APK has bundled libksud_standard.so in its native library directory.
+     */
+    public static boolean hasBundledStandardKsud(Context ctx) {
+        if (ctx == null) return false;
+        ApplicationInfo ai = ctx.getApplicationInfo();
+        if (ai == null || ai.nativeLibraryDir == null) return false;
+        return new File(ai.nativeLibraryDir, BUNDLED_KSUD_STANDARD_LIB).exists();
+    }
+
+    /**
+     * Checks if DFRoot APK has bundled libksud_samsung.so in its native library directory.
+     */
+    public static boolean hasBundledSamsungKsud(Context ctx) {
+        if (ctx == null) return false;
+        ApplicationInfo ai = ctx.getApplicationInfo();
+        if (ai == null || ai.nativeLibraryDir == null) return false;
+        return new File(ai.nativeLibraryDir, BUNDLED_KSUD_SAMSUNG_LIB).exists();
+    }
+
+    /**
+     * Diagnostic-only reporting for packaged KernelSU CLI binaries.
+     * Does not execute, stage, load, or select either binary.
+     */
+    public void reportBundledDiagnostics(Context ctx, IReporter reporter) {
+        if (reporter == null) return;
+        boolean hasStandard = hasBundledStandardKsud(ctx);
+        boolean hasSamsung = hasBundledSamsungKsud(ctx);
+        reporter.report("--- Bundled KernelSU Diagnostics ---\n");
+        reporter.report("* Standard Variant (libksud_standard.so): " + (hasStandard ? "PRESENT" : "ABSENT") + "\n");
+        reporter.report("  - Compatibility: UNKNOWN (requires authoritative kernel driver verification)\n");
+        reporter.report("* Samsung Variant (libksud_samsung.so): " + (hasSamsung ? "PRESENT" : "ABSENT") + "\n");
+        reporter.report("  - Compatibility: UNKNOWN (requires authoritative kernel driver verification)\n");
+        reporter.report("* Status: Diagnostic-only mode. Neither binary is staged or selected.\n\n");
     }
 
     /**
@@ -137,6 +175,5 @@ public class KernelSuManager {
                 reporter.report("* KernelSU Driver: Query error or interface exception\n");
                 break;
         }
-        reporter.report("----------------------------------------\n\n");
     }
 }
