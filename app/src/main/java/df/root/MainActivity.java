@@ -51,8 +51,17 @@ public class MainActivity extends Activity implements IReporter {
     public void report(String msg) {
         Log.i(TAG, msg.trim());
         mMain.post(() -> {
-            outputView.append(msg);
-            outputScroll.post(() -> outputScroll.fullScroll(View.FOCUS_DOWN));
+            if (isDestroyed() || isFinishing()) return;
+            if (outputView != null) {
+                outputView.append(msg);
+            }
+            if (outputScroll != null) {
+                outputScroll.post(() -> {
+                    if (!isDestroyed() && !isFinishing() && outputScroll != null) {
+                        outputScroll.fullScroll(View.FOCUS_DOWN);
+                    }
+                });
+            }
         });
     }
 
@@ -62,7 +71,9 @@ public class MainActivity extends Activity implements IReporter {
         mDeCtx = createDeviceProtectedStorageContext();
         setContentView(R.layout.activity_main);
 
-        getActionBar().setSubtitle("@diabl0w github/xda");
+        if (getActionBar() != null) {
+            getActionBar().setSubtitle("@diabl0w github/xda");
+        }
 
         btnRun = findViewById(R.id.btnRun);
         outputScroll = findViewById(R.id.outputScroll);
@@ -141,9 +152,12 @@ public class MainActivity extends Activity implements IReporter {
     }
 
     private void updateRunButton() {
+        if (isDestroyed() || isFinishing()) return;
         // Enable if either an external manager is selected OR bundled ksud is available
         boolean canRun = (mValidSuManagerPos >= 1 || KernelSuManager.hasBundledKsud(this));
-        btnRun.setEnabled(canRun && !new File("/dev/df").exists());
+        if (btnRun != null) {
+            btnRun.setEnabled(canRun && !new File("/dev/df").exists());
+        }
     }
 
     private void runExploit() {
@@ -153,7 +167,11 @@ public class MainActivity extends Activity implements IReporter {
                          : rc == 1 ? "DFRoot: Error - ksud nonzero exit"
                          : rc == 2 ? "DFRoot: Error - check logcat & dmesg"
                          : "DFRoot: Error - failed to patch files";
-            mMain.post(() -> Toast.makeText(this, msg, Toast.LENGTH_LONG).show());
+            mMain.post(() -> {
+                if (!isDestroyed() && !isFinishing()) {
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+                }
+            });
 
             if (rc == 0) {
                 // Execute supported KernelSU manager operations in the background
