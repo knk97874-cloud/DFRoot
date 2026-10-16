@@ -13,6 +13,7 @@
 
 #define KSU_DRIVER_PATH "/proc/ksu_driver"
 #define KSU_IOCTL_GET_INFO _IOC(_IOC_READ, 'K', 1, 0x10)
+#define KSU_IOCTL_GRANT_ROOT _IOC(_IOC_WRITE, 'K', 2, sizeof(int))
 #define KSU_GET_INFO_FLAG_MANAGER (1 << 1)
 
 struct ksu_get_info_cmd {
@@ -93,8 +94,17 @@ Java_df_root_ksu_KernelSuNatives_nativeIsManager(JNIEnv *env, jclass clazz) {
 
 JNIEXPORT jint JNICALL
 Java_df_root_ksu_KernelSuNatives_nativeGrantRoot(JNIEnv *env, jclass clazz, jint uid) {
-    (void)env; (void)clazz; (void)uid;
-    // Supercall grant_root is strictly permitted for authorized manager only
-    // If called by an unauthorized package, kernel returns -EPERM
-    return -EPERM;
+    (void)env; (void)clazz;
+    int fd = open(KSU_DRIVER_PATH, O_RDWR | O_CLOEXEC);
+    if (fd < 0) {
+        fd = open("/dev/ksu", O_RDWR | O_CLOEXEC);
+    }
+    if (fd < 0) {
+        return -ENOENT;
+    }
+    int target_uid = (int)uid;
+    int ret = ioctl(fd, KSU_IOCTL_GRANT_ROOT, &target_uid);
+    int res = (ret < 0) ? -errno : ret;
+    close(fd);
+    return (jint)res;
 }

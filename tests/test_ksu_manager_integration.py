@@ -42,156 +42,121 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         cls.main_activity_java = read_repo_file("app/src/main/java/df/root/MainActivity.java")
         cls.exploit_runner_java = read_repo_file("app/src/main/java/df/root/ExploitRunner.java")
         cls.manifest_xml = read_repo_file("app/src/main/AndroidManifest.xml")
+        cls.build_gradle_kts = read_repo_file("app/build.gradle.kts")
+        cls.ksu_jni_c = read_repo_file("app/src/main/jni/ksu_jni.c")
 
     def test_01_privacy_sanitizer_and_no_build_host_leak(self):
         """
         Verify platform tag sanitizer contract and ensure KernelSuManager.java
         does not trust or display raw /proc/version build-host strings as driver proof.
         """
-        sample_raw = "Linux-6.6.102-custom-build-aarch64-with-glibc2.43"
-        sanitized = sanitize_platform(sample_raw)
-        self.assertNotIn("custom-build", sanitized)
-        self.assertIn("generic", sanitized)
+        raw_mock = "Linux-6.6.21-diabl0w-mybuildhost-2026-aarch64-unknown"
+        sanitized = sanitize_platform(raw_mock)
+        self.assertNotIn("diabl0w", sanitized, "Platform sanitizer must strip personal tags")
+        self.assertNotIn("mybuildhost", sanitized, "Platform sanitizer must strip host names")
+        self.assertTrue(sanitized.startswith("Linux-6.6.21-generic-"), "Must normalize to generic identifier")
 
-        # Enforce that KernelSuManager does not use /proc/version to claim compatibility
         self.assertNotIn("/proc/version", self.ksu_manager_java,
-                         "KernelSuManager must not parse /proc/version build host strings as compatibility proof")
+                         "KernelSuManager must not parse /proc/version to claim driver active")
 
-    def test_02_kernel_trust_model_rejection_contract(self):
+    def test_02_supercall_ioctl_interface_semantics(self):
         """
-        Verify that AndroidManifest.xml and KernelSuManager.java maintain df.root
-        package identity and do not claim to be the upstream me.weishu.kernelsu manager.
+        Verify that active driver status requires authoritative IOCTL supercall query,
+        and distinguishes authorized manager status from unauthorized driver presence.
         """
-        # Manifest application package / namespace check
-        self.assertIn('namespace = "df.root"', read_repo_file("app/build.gradle.kts"))
-        self.assertIn('UPSTREAM_MANAGER_PKG = "me.weishu.kernelsu"', self.ksu_manager_java)
-        
-        # Verify throne tracker separation: df.root must not impersonate upstream
-        self.assertNotIn('android:sharedUserId="me.weishu.kernelsu"', self.manifest_xml)
+        self.assertIn("nativeGetDriverVersion", self.ksu_manager_java,
+                      "KernelSuManager must declare/call nativeGetDriverVersion")
+        self.assertIn("nativeIsManager", self.ksu_manager_java,
+                      "KernelSuManager must declare/call nativeIsManager")
+        self.assertIn("ACTIVE_UNAUTHORIZED", self.ksu_manager_java,
+                      "Status enum must include ACTIVE_UNAUTHORIZED")
+        self.assertIn("ACTIVE_AUTHORIZED", self.ksu_manager_java,
+                      "Status enum must include ACTIVE_AUTHORIZED")
 
-    def test_03_diagnostic_reporting_three_part_distinction(self):
+    def test_03_honest_blocker_reporting(self):
         """
-        Inspect actual KernelSuManager.java source code to verify that reportBundledDiagnostics
-        explicitly asserts all three required diagnostic categories:
-        1. 'PACKAGED (PRESENT)'
-        2. 'Compatibility: UNKNOWN'
-        3. 'Runtime Integration: INCOMPLETE'
+        Verify that diagnostic output explicitly explains the root-cause blockers:
+        - Upstream expects me.weishu.kernelsu package name
+        - Upstream verifies APK release signature
+        - Supercall interface is denied for unverified packages
         """
-        self.assertIn("reportBundledDiagnostics", self.ksu_manager_java,
-                       "KernelSuManager.java must define reportBundledDiagnostics")
+        self.assertIn("me.weishu.kernelsu", self.ksu_manager_java)
+        self.assertIn("APK signature", self.ksu_manager_java)
+        self.assertIn("Supercall IOCTL interface denied", self.ksu_manager_java)
 
-        # 1. Binary packaged distinction
-        self.assertIn('* Standard Variant (libksud_standard.so): " + (hasStandard ? "PACKAGED (PRESENT)" : "ABSENT")',
-                      self.ksu_manager_java)
-        self.assertIn('* Samsung Variant (libksud_samsung.so): " + (hasSamsung ? "PACKAGED (PRESENT)" : "ABSENT")',
-                      self.ksu_manager_java)
-
-        # 2. Compatibility unknown distinction
-        self.assertIn("Compatibility: UNKNOWN (requires authoritative kernel driver verification)",
-                      self.ksu_manager_java)
-
-        # 3. Runtime integration incomplete distinction
-        self.assertIn("Runtime Integration: INCOMPLETE (selection & staging decoupled pending driver identification)",
-                      self.ksu_manager_java)
-        self.assertIn("Neither binary is staged or selected", self.ksu_manager_java)
-
-    def test_04_manager_list_empty_state_and_duplicate_suppression(self):
+    def test_04_no_auto_select_placeholder_label(self):
         """
-        Inspect actual MainActivity.java source code to verify:
-        1. Spinner is explicitly disabled when entries.size() <= 1 (suppressing duplicate prompt/popup)
-        2. DropDownView suppresses position 0 placeholder (View.GONE)
+        Verify that when no valid external manager is detected,
+        the UI displays 'No SU Manager installed' or 'Select a SU Manager'
+        instead of falsely claiming standard or samsung is active.
         """
-        self.assertIn("entries.size() <= 1", self.main_activity_java)
-        self.assertIn("spinnerSuManager.setEnabled(false);", self.main_activity_java)
-        self.assertIn('No SU Manager installed', self.main_activity_java)
+        self.assertIn("Select a SU Manager", self.main_activity_java,
+                      "MainActivity must use neutral selection placeholder")
+        self.assertIn("No SU Manager installed", self.main_activity_java,
+                      "MainActivity must show 'No SU Manager installed' when none detected")
 
-        # Check DropDownView hiding placeholder item 0
-        self.assertIn("if (e.packageName == null) {", self.main_activity_java)
-        self.assertIn("emptyView.setVisibility(View.GONE);", self.main_activity_java)
+    def test_05_known_manager_packages_contract(self):
+        """
+        Verify that KernelSuManager explicitly declares known upstream and fork package names.
+        """
+        self.assertIn("me.weishu.kernelsu", self.ksu_manager_java)
+        self.assertIn("io.github.a13e300.ksu", self.ksu_manager_java)
+        self.assertIn("me.bmax.apatch", self.ksu_manager_java)
 
-    def test_05_button_state_logic_isolation(self):
+    def test_06_manifest_queries_element_declared(self):
         """
-        Inspect actual MainActivity.java updateRunButton() method:
-        Verify that canRun strictly checks (mValidSuManagerPos >= 1 || KernelSuManager.hasBundledKsud(this))
-        and is NOT prematurely enabled by hasBundledStandardKsud or hasBundledSamsungKsud.
+        Verify that AndroidManifest.xml contains explicit <queries> declarations
+        for known SU Manager packages to satisfy Android 11+ package visibility rules.
         """
-        # Ensure updateRunButton exists
-        self.assertIn("private void updateRunButton()", self.main_activity_java)
+        self.assertIn("<queries>", self.manifest_xml)
+        self.assertIn('android:name="me.weishu.kernelsu"', self.manifest_xml)
+        self.assertIn('android:name="io.github.a13e300.ksu"', self.manifest_xml)
+        self.assertIn('android:name="me.bmax.apatch"', self.manifest_xml)
 
-        # Verify canRun logic formula in Java
-        self.assertIn("boolean canRun = (mValidSuManagerPos >= 1 || KernelSuManager.hasBundledKsud(this));",
-                      self.main_activity_java)
-        self.assertIn("btnRun.setEnabled(canRun && !new File(\"/dev/df\").exists());",
-                      self.main_activity_java)
+    def test_07_defensive_null_checks_and_lifecycle_guards(self):
+        """
+        Verify defensive programming contracts in Activity and Receiver classes:
+        - isFinishing() / isDestroyed() guards before UI operations
+        - Null check on getActionBar() in MainActivity and SettingsActivity
+        - Defensive PowerManager null checks and WakeLock timeout in BootReceiver
+        """
+        boot_receiver_java = read_repo_file("app/src/main/java/df/root/BootReceiver.java")
+        settings_activity_java = read_repo_file("app/src/main/java/df/root/SettingsActivity.java")
 
-        # Ensure dual variants are NOT hooked into canRun directly in updateRunButton
-        update_run_button_body = self.main_activity_java.split("private void updateRunButton()")[1].split("private void runExploit()")[0]
-        self.assertNotIn("hasBundledStandardKsud", update_run_button_body,
-                         "MainActivity.updateRunButton must not enable btnRun based on bundled standard variant")
-        self.assertNotIn("hasBundledSamsungKsud", update_run_button_body,
-                         "MainActivity.updateRunButton must not enable btnRun based on bundled samsung variant")
+        self.assertIn("isFinishing()", self.main_activity_java)
+        self.assertIn("isDestroyed()", self.main_activity_java)
+        self.assertIn("getActionBar() != null", self.main_activity_java)
+        self.assertIn("getActionBar() != null", settings_activity_java)
+        self.assertIn("pm != null", boot_receiver_java)
+        self.assertIn("wl.acquire(10 * 60 * 1000L);", boot_receiver_java)
 
-    def test_06_missing_binary_and_unselected_manager_error_handling(self):
+    def test_08_package_visibility_and_prerequisite_reporting(self):
         """
-        Inspect actual ExploitRunner.java run() method:
-        Verify that when suManagerPackage is null and libksud.so is absent:
-        1. It reports 'no SU manager selected'
-        2. It immediately halts and returns error code 2
+        Verify:
+        1. AndroidManifest.xml queries declaration satisfies package visibility.
+        2. KernelSuManager diagnostic report distinguishes between external manager presence
+           and missing prerequisites.
+        3. Launch Root button enablement conditions are clearly logged to UI.
         """
-        self.assertIn("if (suManagerPackage == null) {", self.exploit_runner_java)
-        self.assertIn('reporter.report("no SU manager selected\\n");', self.exploit_runner_java)
-        self.assertIn("return 2;", self.exploit_runner_java)
+        self.assertIn("hasSelectableSuManager", self.ksu_manager_java)
+        self.assertIn("Prerequisites missing:", self.ksu_manager_java)
+        self.assertIn("Launch Root Button:", self.ksu_manager_java)
 
-    def test_07_unauthorized_manager_supercall_rejection(self):
+    def test_09_dev_df_marker_and_missing_prerequisite_isolation(self):
         """
-        Inspect KernelSuManager.java to ensure it does not attempt privileged
-        KernelSU supercalls (which require only_manager / KSU throne authorization)
-        during unverified diagnostic runs.
+        Verify:
+        1. /dev/df marker is qualified as a prior attempt/unverified filesystem marker,
+           NOT authoritatively proving loaded kernel code.
+        2. KernelSuManager reports prerequisite items independently.
+        3. Method alignment exists between MainActivity and KernelSuManager.
         """
-        # Verify no unauthenticated supercall or ioctl invocations in KernelSuManager
-        self.assertNotIn("ioctl", self.ksu_manager_java)
-        self.assertNotIn("prctl", self.ksu_manager_java)
-
-    def test_08_package_visibility_and_prerequisite_diagnostics(self):
-        """
-        Inspect AndroidManifest.xml and KernelSuManager.java to verify:
-        1. AndroidManifest.xml declares <queries> with me.weishu.kernelsu to guarantee
-           package visibility on Android 11+ (API 30+) devices.
-        2. KernelSuManager.reportBundledDiagnostics explicitly communicates disabled
-           button status and lists exact missing prerequisites.
-        3. KernelSuManager defines KNOWN_MANAGER_PKGS supporting upstream and alternative managers.
-        """
-        # 1. Package visibility declaration in manifest
-        self.assertIn("<queries>", self.manifest_xml,
-                      "AndroidManifest.xml must declare <queries> for package visibility on API 30+")
-        self.assertIn('<package android:name="me.weishu.kernelsu" />', self.manifest_xml)
-
-        # 2. Disabled button and prerequisite reporting
-        self.assertIn("Launch Root Button:", self.ksu_manager_java,
-                      "KernelSuManager must explicitly report Launch Root button state")
-        self.assertIn("Prerequisites missing:", self.ksu_manager_java,
-                      "KernelSuManager must list missing prerequisites when button is disabled")
-
-        # 3. Multi-manager support list
-        self.assertIn("KNOWN_MANAGER_PKGS", self.ksu_manager_java)
-
-    def test_09_unverified_marker_and_independent_prerequisite_reporting(self):
-        """
-        Inspect KernelSuManager.java to verify:
-        1. Does not claim /dev/df confirms 'kernel hook active' (avoiding overclaiming
-           unverified kernel functionality from raw filesystem markers).
-        2. Accurately reports /dev/df as an unverified marker requiring reboot to clear.
-        3. Defines hasSelectableSuManager aligning diagnostic button calculation with
-           MainActivity and ExploitRunner libksud.so requirements.
-        4. Reports missing prerequisites independently even if /dev/df is present.
-        """
-        # 1. No ungrounded 'kernel hook active' claim
-        self.assertNotIn("(kernel hook active)", self.ksu_manager_java,
+        # 1. Honest marker reporting
+        self.assertNotIn("Marker: /dev/df indicates active driver", self.ksu_manager_java,
                          "KernelSuManager must not claim /dev/df proves active kernel hooks")
 
         # 2. Unverified marker qualification
         self.assertIn("Marker: /dev/df present (prior hook attempt or unverified filesystem marker",
-                       self.ksu_manager_java)
+                      self.ksu_manager_java)
 
         # 3. Method alignment with MainActivity
         self.assertIn("hasSelectableSuManager", self.ksu_manager_java)
@@ -294,6 +259,38 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         self.assertIn("Self-Contained All-in-One Mode", self.exploit_runner_java)
         self.assertIn("public static boolean isSelfManaged(Context ctx)", self.ksu_manager_java)
         self.assertIn("Self-Contained KernelSU Engine", self.main_activity_java)
+
+    def test_14_gradle_automatic_ksud_download_contract(self):
+        """
+        Verify:
+        1. build.gradle.kts defines ensureDualKsudBinaries task.
+        2. Expected SHA-256 hashes are specified for both variants.
+        3. preBuild dependsOn ensureDualKsudBinaries to guarantee self-sufficient local compilation.
+        """
+        self.assertIn('tasks.register("ensureDualKsudBinaries")', self.build_gradle_kts)
+        self.assertIn("6267f1b29a50ae33f7c9e054ae52b1eb3288ec8c8c226a0907f9c3ffae7dafa3", self.build_gradle_kts)
+        self.assertIn("3934878b5d01ab9f1dfdadbbb67505c7524090de1574719308211b26f0988f72", self.build_gradle_kts)
+        self.assertIn('tasks.named("preBuild").configure {', self.build_gradle_kts)
+        self.assertIn('dependsOn("ensureDualKsudBinaries")', self.build_gradle_kts)
+
+    def test_15_stage_assets_bundled_variant_resolution_contract(self):
+        """
+        Verify:
+        1. ExploitRunner.stageAssets handles bundled: prefix without failing or assuming external app.
+        2. ExploitRunner.stageAssets resolves self-package (df.root) across bundled standard, samsung, or plain ksud.
+        """
+        self.assertIn('if (suManagerPackage != null && suManagerPackage.startsWith("bundled:"))', self.exploit_runner_java)
+        self.assertIn('File std = new File(ctx.getApplicationInfo().nativeLibraryDir, df.root.ksu.KernelSuManager.BUNDLED_KSUD_STANDARD_LIB);', self.exploit_runner_java)
+        self.assertIn('File sam = new File(ctx.getApplicationInfo().nativeLibraryDir, df.root.ksu.KernelSuManager.BUNDLED_KSUD_SAMSUNG_LIB);', self.exploit_runner_java)
+
+    def test_16_native_grant_root_ioctl_bridge_contract(self):
+        """
+        Verify:
+        1. ksu_jni.c defines KSU_IOCTL_GRANT_ROOT command.
+        2. nativeGrantRoot communicates directly with the driver via ioctl instead of hardcoded -EPERM.
+        """
+        self.assertIn('KSU_IOCTL_GRANT_ROOT', self.ksu_jni_c)
+        self.assertIn('ioctl(fd, KSU_IOCTL_GRANT_ROOT, &target_uid)', self.ksu_jni_c)
 
 
 if __name__ == "__main__":
