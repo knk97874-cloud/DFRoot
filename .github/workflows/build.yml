@@ -90,16 +90,27 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      - name: Stage verified libksud.so into jniLibs
+      - name: Stage verified dual ksud binaries into jniLibs
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
-          curl -sSL "https://github.com/tiann/KernelSU/releases/download/v3.3.1/ksud-aarch64-linux-android" -o app/src/main/jniLibs/arm64-v8a/libksud.so
-          EXPECTED_SHA="049491e2b4cc0a6c913d3920cb90b8c94c9e8ca96c0ee92818293304973bfb1b"
-          echo "$EXPECTED_SHA  app/src/main/jniLibs/arm64-v8a/libksud.so" | sha256sum -c -
-          PRE_SHA=$(sha256sum app/src/main/jniLibs/arm64-v8a/libksud.so | awk '{print $1}')
-          echo "PRE_SHA=$PRE_SHA" >> $GITHUB_ENV
-          echo "Pre-packaging libksud.so SHA-256: $PRE_SHA"
-          ls -l app/src/main/jniLibs/arm64-v8a/libksud.so
+          
+          # 1. Standard KernelSU ksud v3.3.1
+          curl -sSL "https://github.com/tiann/KernelSU/releases/download/v3.3.1/ksud-aarch64-linux-android" -o app/src/main/jniLibs/arm64-v8a/libksud_standard.so
+          EXPECTED_SHA_STANDARD="049491e2b4cc0a6c913d3920cb90b8c94c9e8ca96c0ee92818293304973bfb1b"
+          echo "$EXPECTED_SHA_STANDARD  app/src/main/jniLibs/arm64-v8a/libksud_standard.so" | sha256sum -c -
+          PRE_SHA_STANDARD=$(sha256sum app/src/main/jniLibs/arm64-v8a/libksud_standard.so | awk '{print $1}')
+          echo "PRE_SHA_STANDARD=$PRE_SHA_STANDARD" >> $GITHUB_ENV
+          echo "Pre-packaging Standard ksud SHA-256: $PRE_SHA_STANDARD"
+
+          # 2. Samsung KernelSU ksud samsung-v2.2
+          curl -sSL "https://github.com/diabl0w/KernelSU/releases/download/samsung-v2.2/ksud-aarch64-linux-android" -o app/src/main/jniLibs/arm64-v8a/libksud_samsung.so
+          EXPECTED_SHA_SAMSUNG="3934878b5d01ab9f1dfdadbbb67505c7524090de1574719308211b26f0988f72"
+          echo "$EXPECTED_SHA_SAMSUNG  app/src/main/jniLibs/arm64-v8a/libksud_samsung.so" | sha256sum -c -
+          PRE_SHA_SAMSUNG=$(sha256sum app/src/main/jniLibs/arm64-v8a/libksud_samsung.so | awk '{print $1}')
+          echo "PRE_SHA_SAMSUNG=$PRE_SHA_SAMSUNG" >> $GITHUB_ENV
+          echo "Pre-packaging Samsung ksud SHA-256: $PRE_SHA_SAMSUNG"
+
+          ls -la app/src/main/jniLibs/arm64-v8a/
 
       - name: Build DFRoot APK
         env:
@@ -113,20 +124,36 @@ jobs:
             ./gradlew :app:assembleRelease
           fi
 
-      - name: Verify libksud.so SHA-256 in packaged APK
+      - name: Verify dual ksud SHA-256 in packaged APK
         run: |
           APK=$(ls app/build/outputs/apk/debug/DFRoot_*.apk 2>/dev/null || ls app/build/outputs/apk/release/DFRoot_*.apk)
           echo "Found APK: $APK"
-          unzip -v "$APK" lib/arm64-v8a/libksud.so
-          POST_SHA=$(unzip -p "$APK" lib/arm64-v8a/libksud.so | sha256sum | awk '{print $1}')
-          echo "Pre-packaging SHA-256:  $PRE_SHA"
-          echo "Post-packaging SHA-256: $POST_SHA"
-          EXPECTED_SHA="049491e2b4cc0a6c913d3920cb90b8c94c9e8ca96c0ee92818293304973bfb1b"
-          if [ "$POST_SHA" != "$EXPECTED_SHA" ]; then
-            echo "ERROR: SHA-256 mismatch! Expected $EXPECTED_SHA but got $POST_SHA"
+          
+          # Inspect zip headers for both files
+          unzip -v "$APK" lib/arm64-v8a/libksud_standard.so
+          unzip -v "$APK" lib/arm64-v8a/libksud_samsung.so
+          
+          # Extract and check Standard ksud
+          POST_SHA_STANDARD=$(unzip -p "$APK" lib/arm64-v8a/libksud_standard.so | sha256sum | awk '{print $1}')
+          echo "Standard Pre-packaging SHA-256:  $PRE_SHA_STANDARD"
+          echo "Standard Post-packaging SHA-256: $POST_SHA_STANDARD"
+          EXPECTED_SHA_STANDARD="049491e2b4cc0a6c913d3920cb90b8c94c9e8ca96c0ee92818293304973bfb1b"
+          if [ "$POST_SHA_STANDARD" != "$EXPECTED_SHA_STANDARD" ]; then
+            echo "ERROR: Standard ksud SHA-256 mismatch! Expected $EXPECTED_SHA_STANDARD but got $POST_SHA_STANDARD"
             exit 1
           fi
-          echo "SUCCESS: libksud.so preserved bit-for-bit in APK with keepDebugSymbols!"
+          
+          # Extract and check Samsung ksud
+          POST_SHA_SAMSUNG=$(unzip -p "$APK" lib/arm64-v8a/libksud_samsung.so | sha256sum | awk '{print $1}')
+          echo "Samsung Pre-packaging SHA-256:  $PRE_SHA_SAMSUNG"
+          echo "Samsung Post-packaging SHA-256: $POST_SHA_SAMSUNG"
+          EXPECTED_SHA_SAMSUNG="3934878b5d01ab9f1dfdadbbb67505c7524090de1574719308211b26f0988f72"
+          if [ "$POST_SHA_SAMSUNG" != "$EXPECTED_SHA_SAMSUNG" ]; then
+            echo "ERROR: Samsung ksud SHA-256 mismatch! Expected $EXPECTED_SHA_SAMSUNG but got $POST_SHA_SAMSUNG"
+            exit 1
+          fi
+          
+          echo "SUCCESS: Both Standard and Samsung ksud binaries preserved bit-for-bit in APK with keepDebugSymbols!"
 
       - name: Upload DFRoot APK
         uses: actions/upload-artifact@v7
