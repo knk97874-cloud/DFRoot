@@ -90,6 +90,12 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      - name: Stage verified libksud.so into jniLibs
+        run: |
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+          curl -sSL "https://github.com/tiann/KernelSU/releases/download/v3.3.1/ksud-aarch64-linux-android" -o app/src/main/jniLibs/arm64-v8a/libksud.so
+          echo "049491e2b4cc0a6c913d3920cb90b8c94c9e8ca96c0ee92818293304973bfb1b  app/src/main/jniLibs/arm64-v8a/libksud.so" | sha256sum -c -
+
       - name: Build DFRoot APK
         env:
           KEYSTORE: ${{ secrets.KEYSTORE }}
@@ -101,6 +107,20 @@ jobs:
             echo "Building release APK..."
             ./gradlew :app:assembleRelease
           fi
+
+      - name: Verify APK contains libksud.so
+        run: |
+          APK=$(ls app/build/outputs/apk/debug/DFRoot_*.apk 2>/dev/null || ls app/build/outputs/apk/release/DFRoot_*.apk)
+          echo "Found APK: $APK"
+          unzip -v "$APK" lib/arm64-v8a/libksud.so
+          EXTRACTED_SHA=$(unzip -p "$APK" lib/arm64-v8a/libksud.so | sha256sum | awk '{print $1}')
+          echo "Extracted lib/arm64-v8a/libksud.so SHA-256: $EXTRACTED_SHA"
+          EXPECTED_SHA="049491e2b4cc0a6c913d3920cb90b8c94c9e8ca96c0ee92818293304973bfb1b"
+          if [ "$EXTRACTED_SHA" != "$EXPECTED_SHA" ]; then
+            echo "ERROR: SHA-256 mismatch! Expected $EXPECTED_SHA but got $EXTRACTED_SHA"
+            exit 1
+          fi
+          echo "SUCCESS: APK packaging verification passed with exact SHA-256 match!"
 
       - name: Upload DFRoot APK
         uses: actions/upload-artifact@v7
