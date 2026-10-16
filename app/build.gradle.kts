@@ -73,7 +73,11 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
-            keepDebugSymbols += listOf("**/libksud.so")
+            keepDebugSymbols += listOf(
+                "**/libksud.so",
+                "**/libksud_standard.so",
+                "**/libksud_samsung.so"
+            )
         }
     }
 }
