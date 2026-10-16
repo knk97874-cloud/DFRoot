@@ -103,6 +103,7 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         """
         self.assertIn("entries.size() <= 1", self.main_activity_java)
         self.assertIn("spinnerSuManager.setEnabled(false);", self.main_activity_java)
+        self.assertIn('No SU Manager installed', self.main_activity_java)
 
         # Check DropDownView hiding placeholder item 0
         self.assertIn("if (e.packageName == null) {", self.main_activity_java)
