@@ -78,7 +78,7 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         3. 'Runtime Integration: INCOMPLETE'
         """
         self.assertIn("reportBundledDiagnostics", self.ksu_manager_java,
-                       "KernelSuManager.java must define reportBundledDiagnostics")
+                      "KernelSuManager.java must define reportBundledDiagnostics")
 
         # 1. Binary packaged distinction
         self.assertIn('* Standard Variant (libksud_standard.so): " + (hasStandard ? "PACKAGED (PRESENT)" : "ABSENT")',
@@ -247,6 +247,38 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         self.assertIn('BUNDLED_KSUD_SAMSUNG_LIB', self.exploit_runner_java)
         self.assertIn('BUNDLED_KSUD_STANDARD_LIB', self.exploit_runner_java)
         self.assertIn('Root exploitation decoupled for safety', self.exploit_runner_java)
+
+    def test_12_bundled_staging_and_accurate_return_code_semantics(self):
+        """
+        Verify:
+        1. ExploitRunner defines explicit, documented return codes.
+        2. Staging is performed for bundled variant into app executable path.
+        3. Staging and decoupled testing returns RC_STAGED_DECOUPLED (4), NEVER RC_SUCCESS (0).
+        4. Staging failure returns RC_STAGE_ERR (3) and missing binary returns RC_GENERAL_ERR (2).
+        5. MainActivity maps RC_STAGED_DECOUPLED to distinct toast without claiming root success.
+        6. Background manager sync is strictly gated on genuine RC_SUCCESS.
+        """
+        # 1. Return code constants in ExploitRunner
+        self.assertIn('public static final int RC_SUCCESS          = 0;', self.exploit_runner_java)
+        self.assertIn('public static final int RC_KSUD_ERR         = 1;', self.exploit_runner_java)
+        self.assertIn('public static final int RC_GENERAL_ERR      = 2;', self.exploit_runner_java)
+        self.assertIn('public static final int RC_STAGE_ERR        = 3;', self.exploit_runner_java)
+        self.assertIn('public static final int RC_STAGED_DECOUPLED = 4;', self.exploit_runner_java)
+
+        # 2. Staging execution in ExploitRunner
+        self.assertIn('stageBin(ctx, bundledSrc, "ksud");', self.exploit_runner_java)
+        self.assertIn('return RC_STAGED_DECOUPLED;', self.exploit_runner_java)
+        self.assertIn('return RC_STAGE_ERR;', self.exploit_runner_java)
+        self.assertIn('return RC_GENERAL_ERR;', self.exploit_runner_java)
+
+        # 3. Decoupled test mode must never return RC_SUCCESS
+        bundled_block = self.exploit_runner_java.split('suManagerPackage.startsWith("bundled:")')[1].split('else if (!suManagerPackage.equals')[0]
+        self.assertNotIn('return RC_SUCCESS;', bundled_block)
+        self.assertNotIn('return 0;', bundled_block)
+
+        # 4. MainActivity UI mapping
+        self.assertIn('rc == ExploitRunner.RC_STAGED_DECOUPLED ? "DFRoot: Staged (Exploitation Decoupled)"', self.main_activity_java)
+        self.assertIn('if (rc == ExploitRunner.RC_SUCCESS)', self.main_activity_java)
 
 
 if __name__ == "__main__":

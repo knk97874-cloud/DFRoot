@@ -207,9 +207,10 @@ public class MainActivity extends Activity implements IReporter {
     private void runExploit() {
         try {
             int rc = ExploitRunner.run(mDeCtx, this);
-            String msg = rc == 0 ? "DFRoot: SUCCESS"
-                         : rc == 1 ? "DFRoot: Error - ksud nonzero exit"
-                         : rc == 2 ? "DFRoot: Error - check logcat & dmesg"
+            String msg = rc == ExploitRunner.RC_SUCCESS ? "DFRoot: SUCCESS"
+                         : rc == ExploitRunner.RC_KSUD_ERR ? "DFRoot: Error - ksud nonzero exit"
+                         : rc == ExploitRunner.RC_GENERAL_ERR ? "DFRoot: Error - check logcat & dmesg"
+                         : rc == ExploitRunner.RC_STAGED_DECOUPLED ? "DFRoot: Staged (Exploitation Decoupled)"
                          : "DFRoot: Error - failed to patch files";
             mMain.post(() -> {
                 if (!isDestroyed() && !isFinishing()) {
@@ -217,7 +218,7 @@ public class MainActivity extends Activity implements IReporter {
                 }
             });
 
-            if (rc == 0) {
+            if (rc == ExploitRunner.RC_SUCCESS) {
                 // Execute supported KernelSU manager operations in the background
                 KernelSuManager.getInstance().executeBackgroundManagerSync(mDeCtx, this);
             }
