@@ -72,17 +72,21 @@ public class KernelSuManager {
 
     /**
      * Diagnostic-only reporting for packaged KernelSU CLI binaries.
-     * Does not execute, stage, load, or select either binary.
+     * Clearly distinguishes:
+     * 1. Binary packaged status
+     * 2. Compatibility status
+     * 3. Runtime integration status
      */
     public void reportBundledDiagnostics(Context ctx, IReporter reporter) {
         if (reporter == null) return;
         boolean hasStandard = hasBundledStandardKsud(ctx);
         boolean hasSamsung = hasBundledSamsungKsud(ctx);
         reporter.report("--- Bundled KernelSU Diagnostics ---\n");
-        reporter.report("* Standard Variant (libksud_standard.so): " + (hasStandard ? "PRESENT" : "ABSENT") + "\n");
+        reporter.report("* Standard Variant (libksud_standard.so): " + (hasStandard ? "PACKAGED (PRESENT)" : "ABSENT") + "\n");
         reporter.report("  - Compatibility: UNKNOWN (requires authoritative kernel driver verification)\n");
-        reporter.report("* Samsung Variant (libksud_samsung.so): " + (hasSamsung ? "PRESENT" : "ABSENT") + "\n");
+        reporter.report("* Samsung Variant (libksud_samsung.so): " + (hasSamsung ? "PACKAGED (PRESENT)" : "ABSENT") + "\n");
         reporter.report("  - Compatibility: UNKNOWN (requires authoritative kernel driver verification)\n");
+        reporter.report("* Runtime Integration: INCOMPLETE (selection & staging decoupled pending driver identification)\n");
         reporter.report("* Status: Diagnostic-only mode. Neither binary is staged or selected.\n\n");
     }
 
