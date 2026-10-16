@@ -91,6 +91,10 @@ public class MainActivity extends Activity implements IReporter {
         entries.add(0, new SuManagerEntry(null, "Select a SU Manager", null));
 
         spinnerSuManager.setAdapter(new SuManagerAdapter(this, entries));
+        if (entries.size() <= 1) {
+            // No external manager detected; disable dropdown popup to prevent duplicate prompt display
+            spinnerSuManager.setEnabled(false);
+        }
 
         KernelSuManager.getInstance().reportBundledDiagnostics(mDeCtx, this);
 
@@ -212,6 +216,13 @@ public class MainActivity extends Activity implements IReporter {
 
         @Override
         public View getDropDownView(int pos, View v, ViewGroup parent) {
+            SuManagerEntry e = getItem(pos);
+            if (e.packageName == null) {
+                View emptyView = new View(getContext());
+                emptyView.setVisibility(View.GONE);
+                emptyView.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0));
+                return emptyView;
+            }
             if (v == null || v.getTag() != Boolean.TRUE)
                 v = LayoutInflater.from(getContext()).inflate(R.layout.item_su_manager, parent, false);
             v.setTag(Boolean.TRUE);
