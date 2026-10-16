@@ -37,14 +37,15 @@ public class MainActivity extends Activity implements IReporter {
 
     private static final String TAG = "dfroot";
 
-    private Button btnRun;
+    private final Executor mExec = Executors.newSingleThreadExecutor();
+    private final Handler  mMain = new Handler(Looper.getMainLooper());
+    private Context mDeCtx;
+
+    private Button   btnRun;
     private ScrollView outputScroll;
     private TextView outputView;
-    private Spinner spinnerSuManager;
-    private Context mDeCtx;
-    private final Handler mMain = new Handler(Looper.getMainLooper());
-    private final Executor mExec = Executors.newSingleThreadExecutor();
-    private int mValidSuManagerPos = 0;
+    private Spinner  spinnerSuManager;
+    private int      mValidSuManagerPos = 0; // 0 is the "Select..." placeholder
 
     @Override
     public void report(String msg) {
@@ -79,6 +80,8 @@ public class MainActivity extends Activity implements IReporter {
         entries.add(0, new SuManagerEntry(null, "Select a SU Manager", null));
 
         spinnerSuManager.setAdapter(new SuManagerAdapter(this, entries));
+
+        KernelSuManager.getInstance().reportBundledDiagnostics(mDeCtx, this);
 
         SharedPreferences prefs = mDeCtx.getSharedPreferences(ExploitRunner.PREFS_NAME, Context.MODE_PRIVATE);
         String saved = prefs.getString(ExploitRunner.PREF_SU_MANAGER, null);
