@@ -151,6 +151,29 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         self.assertNotIn("ioctl", self.ksu_manager_java)
         self.assertNotIn("prctl", self.ksu_manager_java)
 
+    def test_08_package_visibility_and_prerequisite_diagnostics(self):
+        """
+        Inspect AndroidManifest.xml and KernelSuManager.java to verify:
+        1. AndroidManifest.xml declares <queries> with me.weishu.kernelsu to guarantee
+           package visibility on Android 11+ (API 30+) devices.
+        2. KernelSuManager.reportBundledDiagnostics explicitly communicates disabled
+           button status and lists exact missing prerequisites.
+        3. KernelSuManager defines KNOWN_MANAGER_PKGS supporting upstream and alternative managers.
+        """
+        # 1. Package visibility declaration in manifest
+        self.assertIn("<queries>", self.manifest_xml,
+                      "AndroidManifest.xml must declare <queries> for package visibility on API 30+")
+        self.assertIn('<package android:name="me.weishu.kernelsu" />', self.manifest_xml)
+
+        # 2. Disabled button and prerequisite reporting
+        self.assertIn("Launch Root Button:", self.ksu_manager_java,
+                      "KernelSuManager must explicitly report Launch Root button state")
+        self.assertIn("Prerequisites missing:", self.ksu_manager_java,
+                      "KernelSuManager must list missing prerequisites when button is disabled")
+
+        # 3. Multi-manager support list
+        self.assertIn("KNOWN_MANAGER_PKGS", self.ksu_manager_java)
+
 
 if __name__ == "__main__":
     unittest.main()
