@@ -124,10 +124,11 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         self.assertIn("btnRun.setEnabled(canRun && !new File(\"/dev/df\").exists());",
                       self.main_activity_java)
 
-        # Ensure dual variants are NOT hooked into canRun
-        self.assertNotIn("hasBundledStandardKsud", self.main_activity_java,
+        # Ensure dual variants are NOT hooked into canRun directly in updateRunButton
+        update_run_button_body = self.main_activity_java.split("private void updateRunButton()")[1].split("private void runExploit()")[0]
+        self.assertNotIn("hasBundledStandardKsud", update_run_button_body,
                          "MainActivity.updateRunButton must not enable btnRun based on bundled standard variant")
-        self.assertNotIn("hasBundledSamsungKsud", self.main_activity_java,
+        self.assertNotIn("hasBundledSamsungKsud", update_run_button_body,
                          "MainActivity.updateRunButton must not enable btnRun based on bundled samsung variant")
 
     def test_06_missing_binary_and_unselected_manager_error_handling(self):
@@ -155,9 +156,9 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         """
         Inspect AndroidManifest.xml and KernelSuManager.java to verify:
         1. AndroidManifest.xml declares <queries> with me.weishu.kernelsu to guarantee
-            package visibility on Android 11+ (API 30+) devices.
+        package visibility on Android 11+ (API 30+) devices.
         2. KernelSuManager.reportBundledDiagnostics explicitly communicates disabled
-            button status and lists exact missing prerequisites.
+        button status and lists exact missing prerequisites.
         3. KernelSuManager defines KNOWN_MANAGER_PKGS supporting upstream and alternative managers.
         """
         # 1. Package visibility declaration in manifest
@@ -178,10 +179,10 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         """
         Inspect KernelSuManager.java to verify:
         1. Does not claim /dev/df confirms 'kernel hook active' (avoiding overclaiming
-            unverified kernel functionality from raw filesystem markers).
+        unverified kernel functionality from raw filesystem markers).
         2. Accurately reports /dev/df as an unverified marker requiring reboot to clear.
         3. Defines hasSelectableSuManager aligning diagnostic button calculation with
-            MainActivity and ExploitRunner libksud.so requirements.
+        MainActivity and ExploitRunner libksud.so requirements.
         4. Reports missing prerequisites independently even if /dev/df is present.
         """
         # 1. No ungrounded 'kernel hook active' claim
@@ -224,6 +225,28 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         self.assertIn("hasBundledStandardKsud", self.ksu_manager_java)
         self.assertIn("hasBundledSamsungKsud", self.ksu_manager_java)
         self.assertIn("Runtime Integration: INCOMPLETE", self.ksu_manager_java)
+
+    def test_11_bundled_variant_ui_selection_and_button_enablement(self):
+        """
+        Verify Option A contract:
+        1. KernelSuManager defines bundled variant package IDs.
+        2. MainActivity populates entries with bundled variants and auto-selects based on Build.MANUFACTURER.
+        3. ExploitRunner safely handles bundled: prefix by verifying binary accessibility in nativeLibraryDir.
+        """
+        # 1. Package IDs in KernelSuManager
+        self.assertIn('public static final String ID_BUNDLED_STANDARD = "bundled:standard";', self.ksu_manager_java)
+        self.assertIn('public static final String ID_BUNDLED_SAMSUNG = "bundled:samsung";', self.ksu_manager_java)
+
+        # 2. Bundled entries in MainActivity
+        self.assertIn('ID_BUNDLED_STANDARD', self.main_activity_java)
+        self.assertIn('ID_BUNDLED_SAMSUNG', self.main_activity_java)
+        self.assertIn('Build.MANUFACTURER.equalsIgnoreCase("samsung")', self.main_activity_java)
+
+        # 3. ExploitRunner safe decoupled backend guard
+        self.assertIn('suManagerPackage.startsWith("bundled:")', self.exploit_runner_java)
+        self.assertIn('BUNDLED_KSUD_SAMSUNG_LIB', self.exploit_runner_java)
+        self.assertIn('BUNDLED_KSUD_STANDARD_LIB', self.exploit_runner_java)
+        self.assertIn('Root exploitation decoupled for safety', self.exploit_runner_java)
 
 
 if __name__ == "__main__":

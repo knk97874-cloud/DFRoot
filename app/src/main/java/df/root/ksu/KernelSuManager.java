@@ -16,6 +16,8 @@ public class KernelSuManager {
     public static final String BUNDLED_KSUD_LIB = "libksud.so";
     public static final String BUNDLED_KSUD_STANDARD_LIB = "libksud_standard.so";
     public static final String BUNDLED_KSUD_SAMSUNG_LIB = "libksud_samsung.so";
+    public static final String ID_BUNDLED_STANDARD = "bundled:standard";
+    public static final String ID_BUNDLED_SAMSUNG = "bundled:samsung";
     public static final String[] KNOWN_MANAGER_PKGS = {
         UPSTREAM_MANAGER_PKG,
         "io.github.a13e300.ksu",
@@ -96,7 +98,7 @@ public class KernelSuManager {
 
         boolean hasSelectableManager = hasSelectableSuManager(ctx);
         String installedManagerPkg = getInstalledExternalManagerPackage(ctx);
-        boolean hasBundled = hasBundledKsud(ctx);
+        boolean hasBundled = hasBundledKsud(ctx) || hasStandard || hasSamsung;
         boolean isHooked = new File("/dev/df").exists();
 
         reporter.report("* Launch Root Button: " + ((hasSelectableManager || hasBundled) && !isHooked ? "ENABLED" : "DISABLED") + "\n");

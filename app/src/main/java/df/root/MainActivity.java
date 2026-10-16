@@ -88,6 +88,18 @@ public class MainActivity extends Activity implements IReporter {
             entries.add(new SuManagerEntry(ai.packageName, pm.getApplicationLabel(ai), pm.getApplicationIcon(ai)));
         }
         entries.sort((a, b) -> a.label.toString().compareToIgnoreCase(b.label.toString()));
+
+        // Populate bundled variants (Option A: Smart UI Selection)
+        boolean hasBundledStd = KernelSuManager.hasBundledStandardKsud(this);
+        boolean hasBundledSam = KernelSuManager.hasBundledSamsungKsud(this);
+        Drawable defaultIcon = getApplicationInfo().loadIcon(pm);
+        if (hasBundledStd) {
+            entries.add(new SuManagerEntry(KernelSuManager.ID_BUNDLED_STANDARD, "Bundled Standard KernelSU (v3.3.1)", defaultIcon));
+        }
+        if (hasBundledSam) {
+            entries.add(new SuManagerEntry(KernelSuManager.ID_BUNDLED_SAMSUNG, "Bundled Samsung KernelSU (v2.2)", defaultIcon));
+        }
+
         String placeholder;
         if (!entries.isEmpty()) {
             placeholder = "Select a SU Manager";
@@ -124,9 +136,26 @@ public class MainActivity extends Activity implements IReporter {
             prefs.edit().remove(ExploitRunner.PREF_SU_MANAGER).apply();
         }
         if (!savedFound && entries.size() > 1) {
-            spinnerSuManager.setSelection(1);
-            mValidSuManagerPos = 1;
-            prefs.edit().putString(ExploitRunner.PREF_SU_MANAGER, entries.get(1).packageName).apply();
+            int defaultPos = 1;
+            // Smart auto-select: if manufacturer is Samsung, choose Samsung variant if available
+            if (android.os.Build.MANUFACTURER.equalsIgnoreCase("samsung") && hasBundledSam) {
+                for (int i = 1; i < entries.size(); i++) {
+                    if (KernelSuManager.ID_BUNDLED_SAMSUNG.equals(entries.get(i).packageName)) {
+                        defaultPos = i;
+                        break;
+                    }
+                }
+            } else if (hasBundledStd) {
+                for (int i = 1; i < entries.size(); i++) {
+                    if (KernelSuManager.ID_BUNDLED_STANDARD.equals(entries.get(i).packageName)) {
+                        defaultPos = i;
+                        break;
+                    }
+                }
+            }
+            spinnerSuManager.setSelection(defaultPos);
+            mValidSuManagerPos = defaultPos;
+            prefs.edit().putString(ExploitRunner.PREF_SU_MANAGER, entries.get(defaultPos).packageName).apply();
         }
 
         spinnerSuManager.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -249,7 +278,7 @@ public class MainActivity extends Activity implements IReporter {
             SuManagerEntry e = getItem(pos);
             ImageView icon = v.findViewById(R.id.iconApp);
             TextView label = v.findViewById(R.id.labelApp);
-            if (e.packageName == null) {
+            if (e.packageName == null || e.packageName.startsWith("bundled:")) {
                 icon.setVisibility(View.GONE);
                 label.setVisibility(View.VISIBLE);
                 label.setText(e.label);
