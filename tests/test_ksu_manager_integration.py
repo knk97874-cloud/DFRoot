@@ -268,7 +268,7 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         3. preBuild dependsOn ensureDualKsudBinaries to guarantee self-sufficient local compilation.
         """
         self.assertIn('tasks.register("ensureDualKsudBinaries")', self.build_gradle_kts)
-        self.assertIn("6267f1b29a50ae33f7c9e054ae52b1eb3288ec8c8c226a0907f9c3ffae7dafa3", self.build_gradle_kts)
+        self.assertIn("049491e2b4cc0a6c913d3920cb90b8c94c9e8ca96c0ee92818293304973bfb1b", self.build_gradle_kts)
         self.assertIn("3934878b5d01ab9f1dfdadbbb67505c7524090de1574719308211b26f0988f72", self.build_gradle_kts)
         self.assertIn('tasks.named("preBuild").configure {', self.build_gradle_kts)
         self.assertIn('dependsOn("ensureDualKsudBinaries")', self.build_gradle_kts)
