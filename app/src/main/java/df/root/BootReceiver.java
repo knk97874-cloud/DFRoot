@@ -22,11 +22,15 @@ public class BootReceiver extends BroadcastReceiver implements IReporter {
             Log.i(TAG, "boot: already hooked, skipping");
             return;
         }
-        Log.i(TAG, "boot: " + intent.getAction());
+        Log.i(TAG, "boot: " + (intent != null ? intent.getAction() : "null"));
         final Context deCtx = context.createDeviceProtectedStorageContext();
         PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-        PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "dfroot:boot");
-        wl.acquire();
+        final PowerManager.WakeLock wl = (pm != null)
+                ? pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "dfroot:boot")
+                : null;
+        if (wl != null) {
+            wl.acquire(10 * 60 * 1000L); // 10-minute safeguard timeout
+        }
         new Thread(() -> {
             try {
                 int rc = ExploitRunner.run(deCtx, this);
@@ -34,7 +38,9 @@ public class BootReceiver extends BroadcastReceiver implements IReporter {
             } catch (Exception e) {
                 Log.e(TAG, "boot: exploit exception", e);
             } finally {
-                wl.release();
+                if (wl != null && wl.isHeld()) {
+                    wl.release();
+                }
             }
         }, "dfroot-boot").start();
     }
