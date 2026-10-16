@@ -78,7 +78,7 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         3. 'Runtime Integration: INCOMPLETE'
         """
         self.assertIn("reportBundledDiagnostics", self.ksu_manager_java,
-                      "KernelSuManager.java must define reportBundledDiagnostics")
+                       "KernelSuManager.java must define reportBundledDiagnostics")
 
         # 1. Binary packaged distinction
         self.assertIn('* Standard Variant (libksud_standard.so): " + (hasStandard ? "PACKAGED (PRESENT)" : "ABSENT")',
@@ -155,9 +155,9 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         """
         Inspect AndroidManifest.xml and KernelSuManager.java to verify:
         1. AndroidManifest.xml declares <queries> with me.weishu.kernelsu to guarantee
-           package visibility on Android 11+ (API 30+) devices.
+            package visibility on Android 11+ (API 30+) devices.
         2. KernelSuManager.reportBundledDiagnostics explicitly communicates disabled
-           button status and lists exact missing prerequisites.
+            button status and lists exact missing prerequisites.
         3. KernelSuManager defines KNOWN_MANAGER_PKGS supporting upstream and alternative managers.
         """
         # 1. Package visibility declaration in manifest
@@ -178,10 +178,10 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
         """
         Inspect KernelSuManager.java to verify:
         1. Does not claim /dev/df confirms 'kernel hook active' (avoiding overclaiming
-           unverified kernel functionality from raw filesystem markers).
+            unverified kernel functionality from raw filesystem markers).
         2. Accurately reports /dev/df as an unverified marker requiring reboot to clear.
         3. Defines hasSelectableSuManager aligning diagnostic button calculation with
-           MainActivity and ExploitRunner libksud.so requirements.
+            MainActivity and ExploitRunner libksud.so requirements.
         4. Reports missing prerequisites independently even if /dev/df is present.
         """
         # 1. No ungrounded 'kernel hook active' claim
@@ -197,6 +197,33 @@ class TestKernelSuManagerStaticContract(unittest.TestCase):
 
         # 4. Independent prerequisite checking
         self.assertIn("if (!hasSelectableManager && !hasBundled)", self.ksu_manager_java)
+
+    def test_10_four_state_manager_and_binary_distinction(self):
+        """
+        Inspect MainActivity.java and KernelSuManager.java to verify precise distinction
+        across all four states:
+        1. A known manager package is installed and visible with libksud.so (Select a SU Manager).
+        2. A manager package is installed and visible, but lacks libksud.so (Manager installed (lacks libksud.so)).
+        3. No supported manager package is installed (No SU Manager installed).
+        4. Bundled binaries exist but runtime integration is incomplete.
+        """
+        # 1. State 2 distinct placeholder in MainActivity
+        self.assertIn('placeholder = "Manager installed (lacks libksud.so)";', self.main_activity_java)
+        self.assertIn('placeholder = "No SU Manager installed";', self.main_activity_java)
+        self.assertIn('placeholder = "Select a SU Manager";', self.main_activity_java)
+
+        # 2. Package discovery method in KernelSuManager
+        self.assertIn("getInstalledExternalManagerPackage", self.ksu_manager_java)
+
+        # 3. Diagnostic reporting differentiates package presence vs binary availability
+        self.assertIn('External SU Manager is NOT installed', self.ksu_manager_java)
+        self.assertIn('External SU Manager (" + installedManagerPkg + ") is installed but lacks extracted libksud.so',
+                      self.ksu_manager_java)
+
+        # 4. State 4: Bundled binaries distinction (packaged vs incomplete runtime integration)
+        self.assertIn("hasBundledStandardKsud", self.ksu_manager_java)
+        self.assertIn("hasBundledSamsungKsud", self.ksu_manager_java)
+        self.assertIn("Runtime Integration: INCOMPLETE", self.ksu_manager_java)
 
 
 if __name__ == "__main__":

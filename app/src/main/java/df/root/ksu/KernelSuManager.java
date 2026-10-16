@@ -95,7 +95,7 @@ public class KernelSuManager {
         reporter.report("* Status: Diagnostic-only mode. Neither binary is staged or selected.\n");
 
         boolean hasSelectableManager = hasSelectableSuManager(ctx);
-        boolean hasExternalManager = isExternalManagerInstalled(ctx);
+        String installedManagerPkg = getInstalledExternalManagerPackage(ctx);
         boolean hasBundled = hasBundledKsud(ctx);
         boolean isHooked = new File("/dev/df").exists();
 
@@ -105,13 +105,13 @@ public class KernelSuManager {
         }
         if (!hasSelectableManager && !hasBundled) {
             reporter.report("  - Prerequisites missing:\n");
-            if (!hasExternalManager) {
-                reporter.report("    1. External SU Manager (me.weishu.kernelsu) is NOT installed\n");
+            if (installedManagerPkg == null) {
+                reporter.report("    1. External SU Manager is NOT installed (checked me.weishu.kernelsu, io.github.a13e300.ksu, me.bmax.apatch)\n");
             } else {
-                reporter.report("    1. External SU Manager is installed but lacks extracted libksud.so in nativeLibraryDir\n");
+                reporter.report("    1. External SU Manager (" + installedManagerPkg + ") is installed but lacks extracted libksud.so in nativeLibraryDir\n");
             }
             reporter.report("    2. Bundled binaries are for diagnostic detection only, not staged into runtime path\n");
-            reporter.report("  - Action Required: Install an external SU Manager APK or stage a verified binary\n");
+            reporter.report("  - Action Required: Install an external SU Manager APK with extracted libksud.so or stage a verified binary\n");
         }
         reporter.report("\n");
     }
@@ -134,19 +134,27 @@ public class KernelSuManager {
     }
 
     /**
-     * Checks if a supported external KernelSU Manager app is installed.
+     * Returns the package name of the first installed and visible external SU manager,
+     * or null if no supported manager package is installed.
      */
-    public boolean isExternalManagerInstalled(Context ctx) {
-        if (ctx == null) return false;
+    public static String getInstalledExternalManagerPackage(Context ctx) {
+        if (ctx == null) return null;
         PackageManager pm = ctx.getPackageManager();
-        if (pm == null) return false;
+        if (pm == null) return null;
         for (String pkg : KNOWN_MANAGER_PKGS) {
             try {
                 pm.getApplicationInfo(pkg, 0);
-                return true;
+                return pkg;
             } catch (PackageManager.NameNotFoundException ignored) {}
         }
-        return false;
+        return null;
+    }
+
+    /**
+     * Checks if a supported external KernelSU Manager app is installed.
+     */
+    public boolean isExternalManagerInstalled(Context ctx) {
+        return getInstalledExternalManagerPackage(ctx) != null;
     }
 
     /**
@@ -185,11 +193,11 @@ public class KernelSuManager {
     public void executeBackgroundManagerSync(Context ctx, IReporter reporter) {
         reporter.report("\n--- KernelSU Background Manager Sync ---\n");
 
-        boolean externalInstalled = isExternalManagerInstalled(ctx);
-        if (externalInstalled) {
-            reporter.report("* Upstream Manager: me.weishu.kernelsu detected on device\n");
+        String installedPkg = getInstalledExternalManagerPackage(ctx);
+        if (installedPkg != null) {
+            reporter.report("* Upstream Manager: " + installedPkg + " detected on device\n");
         } else {
-            reporter.report("* Upstream Manager: me.weishu.kernelsu not installed\n");
+            reporter.report("* Upstream Manager: none detected (checked " + UPSTREAM_MANAGER_PKG + ", io.github.a13e300.ksu, me.bmax.apatch)\n");
         }
 
         Status status = evaluateStatus(ctx);
@@ -214,8 +222,8 @@ public class KernelSuManager {
                 reporter.report("  - Upstream driver expects KSU_PACKAGE_NAME = me.weishu.kernelsu\n");
                 reporter.report("  - Driver verifies APK signature matching release keystore\n");
                 reporter.report("  - Supercall IOCTL interface denied for package: " + ctx.getPackageName() + "\n");
-                if (externalInstalled) {
-                    reporter.report("  -> Recommendation: Launch me.weishu.kernelsu for policy & module management.\n");
+                if (installedPkg != null) {
+                    reporter.report("  -> Recommendation: Launch " + installedPkg + " for policy & module management.\n");
                 } else {
                     reporter.report("  -> Recommendation: Install official me.weishu.kernelsu to grant root to apps.\n");
                 }

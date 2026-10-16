@@ -88,12 +88,22 @@ public class MainActivity extends Activity implements IReporter {
             entries.add(new SuManagerEntry(ai.packageName, pm.getApplicationLabel(ai), pm.getApplicationIcon(ai)));
         }
         entries.sort((a, b) -> a.label.toString().compareToIgnoreCase(b.label.toString()));
-        String placeholder = entries.isEmpty() ? "No SU Manager installed" : "Select a SU Manager";
+        String placeholder;
+        if (!entries.isEmpty()) {
+            placeholder = "Select a SU Manager";
+        } else {
+            String installedPkg = KernelSuManager.getInstalledExternalManagerPackage(this);
+            if (installedPkg != null) {
+                placeholder = "Manager installed (lacks libksud.so)";
+            } else {
+                placeholder = "No SU Manager installed";
+            }
+        }
         entries.add(0, new SuManagerEntry(null, placeholder, null));
 
         spinnerSuManager.setAdapter(new SuManagerAdapter(this, entries));
         if (entries.size() <= 1) {
-            // No external manager detected; disable dropdown popup to prevent duplicate prompt display
+            // No runnable external manager detected; disable dropdown popup to prevent duplicate prompt display
             spinnerSuManager.setEnabled(false);
         }
 
