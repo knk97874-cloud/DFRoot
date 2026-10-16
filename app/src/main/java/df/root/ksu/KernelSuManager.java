@@ -94,20 +94,43 @@ public class KernelSuManager {
         reporter.report("* Runtime Integration: INCOMPLETE (selection & staging decoupled pending driver identification)\n");
         reporter.report("* Status: Diagnostic-only mode. Neither binary is staged or selected.\n");
 
+        boolean hasSelectableManager = hasSelectableSuManager(ctx);
         boolean hasExternalManager = isExternalManagerInstalled(ctx);
         boolean hasBundled = hasBundledKsud(ctx);
         boolean isHooked = new File("/dev/df").exists();
 
-        reporter.report("* Launch Root Button: " + ((hasExternalManager || hasBundled) && !isHooked ? "ENABLED" : "DISABLED") + "\n");
+        reporter.report("* Launch Root Button: " + ((hasSelectableManager || hasBundled) && !isHooked ? "ENABLED" : "DISABLED") + "\n");
         if (isHooked) {
-            reporter.report("  - Prerequisite: /dev/df already exists (kernel hook active)\n");
-        } else if (!hasExternalManager && !hasBundled) {
+            reporter.report("  - Marker: /dev/df present (prior hook attempt or unverified filesystem marker; reboot required to clear)\n");
+        }
+        if (!hasSelectableManager && !hasBundled) {
             reporter.report("  - Prerequisites missing:\n");
-            reporter.report("    1. External SU Manager (me.weishu.kernelsu) is NOT installed\n");
+            if (!hasExternalManager) {
+                reporter.report("    1. External SU Manager (me.weishu.kernelsu) is NOT installed\n");
+            } else {
+                reporter.report("    1. External SU Manager is installed but lacks extracted libksud.so in nativeLibraryDir\n");
+            }
             reporter.report("    2. Bundled binaries are for diagnostic detection only, not staged into runtime path\n");
             reporter.report("  - Action Required: Install an external SU Manager APK or stage a verified binary\n");
         }
         reporter.report("\n");
+    }
+
+    /**
+     * Checks if any installed non-system app contains libksud.so in its nativeLibraryDir.
+     * Matches the exact criteria used by MainActivity and ExploitRunner.
+     */
+    public boolean hasSelectableSuManager(Context ctx) {
+        if (ctx == null) return false;
+        PackageManager pm = ctx.getPackageManager();
+        if (pm == null) return false;
+        for (ApplicationInfo ai : pm.getInstalledApplications(0)) {
+            if ((ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
+            if (ai.nativeLibraryDir != null && new File(ai.nativeLibraryDir, BUNDLED_KSUD_LIB).exists()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
