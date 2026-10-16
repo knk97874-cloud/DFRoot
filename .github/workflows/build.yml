@@ -112,6 +112,10 @@ jobs:
 
           ls -la app/src/main/jniLibs/arm64-v8a/
 
+      - name: Run automated integration tests
+        run: |
+          python3 -m unittest tests/test_ksu_manager_integration.py
+
       - name: Build DFRoot APK
         env:
           KEYSTORE: ${{ secrets.KEYSTORE }}
