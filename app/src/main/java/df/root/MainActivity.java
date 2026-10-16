@@ -88,7 +88,8 @@ public class MainActivity extends Activity implements IReporter {
             entries.add(new SuManagerEntry(ai.packageName, pm.getApplicationLabel(ai), pm.getApplicationIcon(ai)));
         }
         entries.sort((a, b) -> a.label.toString().compareToIgnoreCase(b.label.toString()));
-        entries.add(0, new SuManagerEntry(null, "Select a SU Manager", null));
+        String placeholder = entries.isEmpty() ? "No SU Manager installed" : "Select a SU Manager";
+        entries.add(0, new SuManagerEntry(null, placeholder, null));
 
         spinnerSuManager.setAdapter(new SuManagerAdapter(this, entries));
         if (entries.size() <= 1) {
