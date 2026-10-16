@@ -94,6 +94,11 @@ public class MainActivity extends Activity implements IReporter {
         if (!savedFound && saved != null) { // Saved manager was uninstalled
             prefs.edit().remove(ExploitRunner.PREF_SU_MANAGER).apply();
         }
+        if (!savedFound && entries.size() > 1) {
+            spinnerSuManager.setSelection(1);
+            mValidSuManagerPos = 1;
+            prefs.edit().putString(ExploitRunner.PREF_SU_MANAGER, entries.get(1).packageName).apply();
+        }
 
         spinnerSuManager.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
