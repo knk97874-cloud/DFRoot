@@ -56,21 +56,25 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Validate signing config
-        if: github.event_name != 'pull_request' && secrets.KEYSTORE != ''
+        env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
+        if: github.event_name != 'pull_request' && env.KEYSTORE != ''
         run: |
-          if [ "${{ secrets.KEYSTORE }}" = "" ]; then
-            echo "::error::Signing secrets not configured. KEYSTORE secret is required for release builds."
-            exit 1
-          fi
+          echo "Release keystore present."
 
       - name: Create signing.properties
-        if: github.event_name != 'pull_request' && secrets.KEYSTORE != ''
+        env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        if: github.event_name != 'pull_request' && env.KEYSTORE != ''
         run: |
           echo KEYSTORE_FILE=../keystore.jks > signing.properties
-          echo KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} >> signing.properties
-          echo KEY_ALIAS=${{ secrets.KEY_ALIAS }} >> signing.properties
-          echo KEY_PASSWORD=${{ secrets.KEY_PASSWORD }} >> signing.properties
-          echo ${{ secrets.KEYSTORE }} | base64 --decode > keystore.jks
+          echo KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD >> signing.properties
+          echo KEY_ALIAS=$KEY_ALIAS >> signing.properties
+          echo KEY_PASSWORD=$KEY_PASSWORD >> signing.properties
+          echo $KEYSTORE | base64 --decode > keystore.jks
 
       - name: Download DF LKMs
         uses: actions/download-artifact@v7
@@ -87,8 +91,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
 
       - name: Build DFRoot APK
+        env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
         run: |
-          if [ "${{ secrets.KEYSTORE }}" = "" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "$KEYSTORE" = "" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "Building debug APK..."
             ./gradlew :app:assembleDebug
           else
