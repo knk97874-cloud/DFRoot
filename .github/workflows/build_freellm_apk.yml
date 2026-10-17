@@ -38,14 +38,14 @@ jobs:
       - name: Prepare APK Output
         run: |
           mkdir -p apk_output
-          find freellm_superpro/app/build/outputs/apk/debug -name "*.apk" -exec cp {} apk_output/FreeLLM_SuperPro_v1.0.1.apk \;
+          find freellm_superpro/app/build/outputs/apk/debug -name "*.apk" -exec cp {} apk_output/FreeLLM_SuperPro_v1.0.2.apk \;
           ls -la apk_output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FreeLLM_SuperPro_v1.0.1_APK
-          path: apk_output/FreeLLM_SuperPro_v1.0.1.apk
+          name: FreeLLM_SuperPro_v1.0.2_APK
+          path: apk_output/FreeLLM_SuperPro_v1.0.2.apk
           retention-days: 14
 
       - name: Create GitHub Release
@@ -54,16 +54,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: freellm-v1.0.1
-          name: "FreeLLM SuperPro AI v1.0.1 (Native Android APK)"
+          tag_name: freellm-v1.0.2
+          name: "FreeLLM SuperPro AI v1.0.2 (Native Android APK)"
           body: |
-            ### 🚀 FreeLLM SuperPro AI v1.0.1 (Native Android App)
+            ### 🚀 FreeLLM SuperPro AI v1.0.2 (Native Android App)
             - **Package**: `com.freellm.superpro`
-            - **Bug Fix**: Fixed duplicate prompt payload bug causing upstream LLM 400 error on questions like "Aaj Konsa din hai"
-            - **Bug Fix**: Added real-time temporal context (Current date & day of week)
-            - **Bug Fix**: Fixed Room DB race condition and enabled persistent error bubbles
-            - **UI Fix**: Added soft-keyboard IME padding so input bar floats smoothly above Gboard
+            - **Fatal Crash Fix**: Fixed instant crash when clicking Send button (⬆️)
+            - **Database Fix**: Resolved SQLite FOREIGN KEY constraint error (code 787) on new conversations
+            - **Room DB Migration**: Bumped Room schema to v2 with fallbackToDestructiveMigration
+            - **Coroutine Hardening**: Added CoroutineExceptionHandler & IO Dispatcher isolation
+            - **UI Stability**: Hardened Jetpack Compose LazyColumn keys with indexed message mapping
             - **Ready for 1-Tap Install via MT Manager Canary (`bin.mt.plus.canary`)**
-          files: apk_output/FreeLLM_SuperPro_v1.0.1.apk
+          files: apk_output/FreeLLM_SuperPro_v1.0.2.apk
           draft: false
           prerelease: false
