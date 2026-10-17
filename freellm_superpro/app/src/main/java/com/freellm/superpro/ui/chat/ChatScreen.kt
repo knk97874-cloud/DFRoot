@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -53,7 +54,9 @@ fun ChatScreen(
     // Auto-scroll on new message / streaming token
     LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length, messages.lastOrNull()?.reasoningContent?.length) {
         if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+            runCatching {
+                listState.animateScrollToItem(messages.size - 1)
+            }
         }
     }
 
@@ -218,7 +221,7 @@ fun ChatScreen(
                             .padding(horizontal = 12.dp),
                         contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
-                        items(messages, key = { it.id }) { msg ->
+                        itemsIndexed(messages, key = { index, msg -> "${msg.id}_$index" }) { _, msg ->
                             MessageBubble(
                                 message = msg,
                                 onSourceClicked = { viewModel.selectCitation(it) },

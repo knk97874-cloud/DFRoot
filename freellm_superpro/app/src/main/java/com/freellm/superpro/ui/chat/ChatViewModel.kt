@@ -16,6 +16,8 @@ import com.freellm.superpro.domain.model.Role
 import com.freellm.superpro.domain.model.SearchSource
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -136,15 +138,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application), T
         }
     }
 
+    private val coroutineExceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        android.util.Log.e("ChatViewModel", "Unhandled coroutine error", throwable)
+        _isStreaming.value = false
+    }
+
     fun sendMessage() {
         val prompt = _inputText.value.trim()
         if (prompt.isEmpty() || _isStreaming.value) return
 
         _inputText.value = ""
-        val convId = _activeConversationId.value ?: run {
-            val newId = java.util.UUID.randomUUID().toString()
-            _activeConversationId.value = newId
-            newId
+        val convId = _activeConversationId.value ?: java.util.UUID.randomUUID().toString()
+        _activeConversationId.value = convId
+
+        if (messageObserverJob == null) {
+            selectConversation(convId)
         }
 
         val userMessage = Message(
@@ -153,26 +161,39 @@ class ChatViewModel(application: Application) : AndroidViewModel(application), T
             content = prompt
         )
 
-        val updatedList = _messages.value + userMessage
+        val updatedList = (_messages.value + userMessage).distinctBy { it.id }
         _messages.value = updatedList
 
-        viewModelScope.launch {
-            // Save user message to database
-            messageDao.insertMessage(
-                MessageEntity(
-                    id = userMessage.id,
-                    conversationId = convId,
-                    role = "user",
-                    content = userMessage.content,
-                    reasoningContent = "",
-                    reasoningDurationSeconds = 0.0,
-                    searchSourcesJson = "[]"
-                )
-            )
+        viewModelScope.launch(Dispatchers.IO + coroutineExceptionHandler) {
+            // Ensure conversation exists in DB before inserting message
+            runCatching {
+                val existing = conversationDao.getConversationById(convId)
+                if (existing == null) {
+                    conversationDao.insertOrUpdate(
+                        ConversationEntity(
+                            id = convId,
+                            title = prompt.take(30),
+                            modelId = currentModel.value
+                        )
+                    )
+                } else if (_messages.value.size <= 2) {
+                    conversationDao.updateTitle(convId, prompt.take(30))
+                }
+            }
 
-            // Auto-update conversation title from first prompt
-            if (_messages.value.size <= 1) {
-                conversationDao.updateTitle(convId, prompt.take(30))
+            // Save user message to database
+            runCatching {
+                messageDao.insertMessage(
+                    MessageEntity(
+                        id = userMessage.id,
+                        conversationId = convId,
+                        role = "user",
+                        content = userMessage.content,
+                        reasoningContent = "",
+                        reasoningDurationSeconds = 0.0,
+                        searchSourcesJson = "[]"
+                    )
+                )
             }
 
             _isStreaming.value = true
@@ -182,9 +203,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application), T
             var searchInjectedPrompt = prompt
 
             if (webSearchEnabled.value) {
-                liveSources = webSearchEngine.search(prompt)
-                if (liveSources.isNotEmpty()) {
-                    searchInjectedPrompt = prompt + webSearchEngine.buildInjectedContext(liveSources)
+                runCatching {
+                    liveSources = webSearchEngine.search(prompt)
+                    if (liveSources.isNotEmpty()) {
+                        searchInjectedPrompt = prompt + webSearchEngine.buildInjectedContext(liveSources)
+                    }
                 }
             }
 
@@ -201,93 +224,120 @@ class ChatViewModel(application: Application) : AndroidViewModel(application), T
                 isStreaming = true
             )
 
-            _messages.value = _messages.value + currentAssistantMsg
+            _messages.value = (_messages.value + currentAssistantMsg).distinctBy { it.id }
 
-            val baseUrl = preferences.apiUrl.first()
-            val apiKey = preferences.apiKey.first()
-            val model = preferences.modelId.first()
-            val sysPrompt = preferences.systemPrompt.first()
-            val temp = preferences.temperature.first()
+            runCatching {
+                val baseUrl = preferences.apiUrl.first()
+                val apiKey = preferences.apiKey.first()
+                val model = preferences.modelId.first()
+                val sysPrompt = preferences.systemPrompt.first()
+                val temp = preferences.temperature.first()
 
-            val streamContent = StringBuilder()
-            val streamReasoning = StringBuilder()
-            var duration = 0.0
+                val streamContent = StringBuilder()
+                val streamReasoning = StringBuilder()
+                var duration = 0.0
 
-            freeLLMClient.streamChat(
-                baseUrl = baseUrl,
-                apiKey = apiKey,
-                model = model,
-                systemPrompt = sysPrompt,
-                history = updatedList,
-                newPrompt = searchInjectedPrompt,
-                deepThinkEnabled = deepThinkEnabled.value,
-                temperature = temp
-            ).collect { update ->
-                when (update) {
-                    is ChatStreamUpdate.ReasoningChunk -> {
-                        streamReasoning.append(update.text)
-                        duration = update.elapsedSeconds
-                        currentAssistantMsg = currentAssistantMsg.copy(
-                            reasoningContent = streamReasoning.toString(),
-                            isReasoningActive = true,
-                            reasoningDurationSeconds = duration
-                        )
-                        updateLastAssistantMessage(currentAssistantMsg)
-                    }
-                    is ChatStreamUpdate.ContentChunk -> {
-                        streamContent.append(update.text)
-                        currentAssistantMsg = currentAssistantMsg.copy(
-                            content = streamContent.toString(),
-                            isReasoningActive = false
-                        )
-                        updateLastAssistantMessage(currentAssistantMsg)
-                    }
-                    is ChatStreamUpdate.Complete -> {
-                        _isStreaming.value = false
-                        currentAssistantMsg = currentAssistantMsg.copy(
-                            content = update.finalContent.ifEmpty { streamContent.toString() },
-                            reasoningContent = update.finalReasoning.ifEmpty { streamReasoning.toString() },
-                            reasoningDurationSeconds = update.durationSeconds,
-                            isReasoningActive = false,
-                            isStreaming = false
-                        )
-                        updateLastAssistantMessage(currentAssistantMsg)
-
-                        // Save assistant message to Room DB
-                        messageDao.insertMessage(
-                            MessageEntity(
-                                id = currentAssistantMsg.id,
-                                conversationId = convId,
-                                role = "assistant",
-                                content = currentAssistantMsg.content,
-                                reasoningContent = currentAssistantMsg.reasoningContent,
-                                reasoningDurationSeconds = currentAssistantMsg.reasoningDurationSeconds,
-                                searchSourcesJson = gson.toJson(currentAssistantMsg.searchSources)
+                freeLLMClient.streamChat(
+                    baseUrl = baseUrl,
+                    apiKey = apiKey,
+                    model = model,
+                    systemPrompt = sysPrompt,
+                    history = updatedList,
+                    newPrompt = searchInjectedPrompt,
+                    deepThinkEnabled = deepThinkEnabled.value,
+                    temperature = temp
+                ).collect { update ->
+                    when (update) {
+                        is ChatStreamUpdate.ReasoningChunk -> {
+                            streamReasoning.append(update.text)
+                            duration = update.elapsedSeconds
+                            currentAssistantMsg = currentAssistantMsg.copy(
+                                reasoningContent = streamReasoning.toString(),
+                                isReasoningActive = true,
+                                reasoningDurationSeconds = duration
                             )
-                        )
-                    }
-                    is ChatStreamUpdate.Error -> {
-                        _isStreaming.value = false
-                        currentAssistantMsg = currentAssistantMsg.copy(
-                            content = "⚠️ ${update.message}",
-                            isReasoningActive = false,
-                            isStreaming = false
-                        )
-                        updateLastAssistantMessage(currentAssistantMsg)
-
-                        // Save error message to Room DB so it remains permanently visible
-                        messageDao.insertMessage(
-                            MessageEntity(
-                                id = currentAssistantMsg.id,
-                                conversationId = convId,
-                                role = "assistant",
-                                content = currentAssistantMsg.content,
-                                reasoningContent = currentAssistantMsg.reasoningContent,
-                                reasoningDurationSeconds = currentAssistantMsg.reasoningDurationSeconds,
-                                searchSourcesJson = gson.toJson(currentAssistantMsg.searchSources)
+                            updateLastAssistantMessage(currentAssistantMsg)
+                        }
+                        is ChatStreamUpdate.ContentChunk -> {
+                            streamContent.append(update.text)
+                            currentAssistantMsg = currentAssistantMsg.copy(
+                                content = streamContent.toString(),
+                                isReasoningActive = false
                             )
-                        )
+                            updateLastAssistantMessage(currentAssistantMsg)
+                        }
+                        is ChatStreamUpdate.Complete -> {
+                            _isStreaming.value = false
+                            currentAssistantMsg = currentAssistantMsg.copy(
+                                content = update.finalContent.ifEmpty { streamContent.toString() },
+                                reasoningContent = update.finalReasoning.ifEmpty { streamReasoning.toString() },
+                                reasoningDurationSeconds = update.durationSeconds,
+                                isReasoningActive = false,
+                                isStreaming = false
+                            )
+                            updateLastAssistantMessage(currentAssistantMsg)
+
+                            // Save assistant message to Room DB
+                            runCatching {
+                                messageDao.insertMessage(
+                                    MessageEntity(
+                                        id = currentAssistantMsg.id,
+                                        conversationId = convId,
+                                        role = "assistant",
+                                        content = currentAssistantMsg.content,
+                                        reasoningContent = currentAssistantMsg.reasoningContent,
+                                        reasoningDurationSeconds = currentAssistantMsg.reasoningDurationSeconds,
+                                        searchSourcesJson = gson.toJson(currentAssistantMsg.searchSources)
+                                    )
+                                )
+                            }
+                        }
+                        is ChatStreamUpdate.Error -> {
+                            _isStreaming.value = false
+                            currentAssistantMsg = currentAssistantMsg.copy(
+                                content = "⚠️ ${update.message}",
+                                isReasoningActive = false,
+                                isStreaming = false
+                            )
+                            updateLastAssistantMessage(currentAssistantMsg)
+
+                            // Save error message to Room DB so it remains permanently visible
+                            runCatching {
+                                messageDao.insertMessage(
+                                    MessageEntity(
+                                        id = currentAssistantMsg.id,
+                                        conversationId = convId,
+                                        role = "assistant",
+                                        content = currentAssistantMsg.content,
+                                        reasoningContent = currentAssistantMsg.reasoningContent,
+                                        reasoningDurationSeconds = currentAssistantMsg.reasoningDurationSeconds,
+                                        searchSourcesJson = gson.toJson(currentAssistantMsg.searchSources)
+                                    )
+                                )
+                            }
+                        }
                     }
+                }
+            }.onFailure { err ->
+                _isStreaming.value = false
+                currentAssistantMsg = currentAssistantMsg.copy(
+                    content = "⚠️ Connection error: ${err.localizedMessage ?: "Failed to reach AI service"}",
+                    isReasoningActive = false,
+                    isStreaming = false
+                )
+                updateLastAssistantMessage(currentAssistantMsg)
+                runCatching {
+                    messageDao.insertMessage(
+                        MessageEntity(
+                            id = currentAssistantMsg.id,
+                            conversationId = convId,
+                            role = "assistant",
+                            content = currentAssistantMsg.content,
+                            reasoningContent = "",
+                            reasoningDurationSeconds = 0.0,
+                            searchSourcesJson = "[]"
+                        )
+                    )
                 }
             }
         }
