@@ -86,9 +86,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application), T
         _inputText.value = newText
     }
 
+    private var messageObserverJob: kotlinx.coroutines.Job? = null
+
     fun selectConversation(id: String) {
         _activeConversationId.value = id
-        viewModelScope.launch {
+        messageObserverJob?.cancel()
+        messageObserverJob = viewModelScope.launch {
             messageDao.getMessagesForConversation(id).collect { entities ->
                 val domainMessages = entities.map { e ->
                     val sourcesType = object : TypeToken<List<SearchSource>>() {}.type
@@ -107,7 +110,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application), T
                         timestamp = e.timestamp
                     )
                 }
-                _messages.value = domainMessages
+                // Preserve in-flight streaming message if Room DB emits while generating
+                val currentStreaming = _messages.value.find { it.isStreaming }
+                if (currentStreaming != null && domainMessages.none { it.id == currentStreaming.id }) {
+                    _messages.value = domainMessages + currentStreaming
+                } else {
+                    _messages.value = domainMessages
+                }
             }
         }
     }
@@ -265,6 +274,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application), T
                             isStreaming = false
                         )
                         updateLastAssistantMessage(currentAssistantMsg)
+
+                        // Save error message to Room DB so it remains permanently visible
+                        messageDao.insertMessage(
+                            MessageEntity(
+                                id = currentAssistantMsg.id,
+                                conversationId = convId,
+                                role = "assistant",
+                                content = currentAssistantMsg.content,
+                                reasoningContent = currentAssistantMsg.reasoningContent,
+                                reasoningDurationSeconds = currentAssistantMsg.reasoningDurationSeconds,
+                                searchSourcesJson = gson.toJson(currentAssistantMsg.searchSources)
+                            )
+                        )
                     }
                 }
             }
@@ -276,8 +298,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application), T
         val index = current.indexOfFirst { it.id == updated.id }
         if (index != -1) {
             current[index] = updated
-            _messages.value = current
+        } else {
+            current.add(updated)
         }
+        _messages.value = current
     }
 
     fun toggleDeepThink() {

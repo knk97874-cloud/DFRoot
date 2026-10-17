@@ -45,6 +45,8 @@ fun ChatInputBar(
         modifier = modifier
             .fillMaxWidth()
             .background(BackgroundDark)
+            .imePadding()
+            .navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         // Quick Mode Pill Toggles Bar

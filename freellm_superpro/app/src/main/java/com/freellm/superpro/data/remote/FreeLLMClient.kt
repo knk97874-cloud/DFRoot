@@ -55,8 +55,10 @@ class FreeLLMClient {
 
             val messagesArray = JSONArray()
 
-            // System message
-            var sys = systemPrompt
+            // System message with live temporal context
+            val dateFormat = java.text.SimpleDateFormat("EEEE, dd MMMM yyyy", java.util.Locale.ENGLISH)
+            val currentDate = dateFormat.format(java.util.Date())
+            var sys = "$systemPrompt\n\n[CONTEXT]: Today is $currentDate."
             if (deepThinkEnabled) {
                 sys += "\n\n[INSTRUCTION]: Provide detailed, step-by-step reasoning inside <think>...</think> tags before delivering your final answer."
             }
@@ -65,8 +67,14 @@ class FreeLLMClient {
                 put("content", sys)
             })
 
-            // Past conversation history (sliding window)
-            history.takeLast(10).forEach { msg ->
+            // Past conversation history (sliding window) - ensure no duplicate trailing prompt
+            val priorHistory = if (history.isNotEmpty() && history.last().role == Role.USER) {
+                history.dropLast(1)
+            } else {
+                history
+            }
+
+            priorHistory.takeLast(10).forEach { msg ->
                 messagesArray.put(JSONObject().apply {
                     put("role", when (msg.role) {
                         Role.USER -> "user"
