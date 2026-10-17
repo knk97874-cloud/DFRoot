@@ -38,14 +38,14 @@ jobs:
       - name: Prepare APK Output
         run: |
           mkdir -p apk_output
-          find freellm_superpro/app/build/outputs/apk/debug -name "*.apk" -exec cp {} apk_output/FreeLLM_SuperPro_v1.0.apk \;
+          find freellm_superpro/app/build/outputs/apk/debug -name "*.apk" -exec cp {} apk_output/FreeLLM_SuperPro_v1.0.1.apk \;
           ls -la apk_output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FreeLLM_SuperPro_v1.0_APK
-          path: apk_output/FreeLLM_SuperPro_v1.0.apk
+          name: FreeLLM_SuperPro_v1.0.1_APK
+          path: apk_output/FreeLLM_SuperPro_v1.0.1.apk
           retention-days: 14
 
       - name: Create GitHub Release
@@ -54,17 +54,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: freellm-v1.0.0
-          name: "FreeLLM SuperPro AI v1.0.0 (Native Android APK)"
+          tag_name: freellm-v1.0.1
+          name: "FreeLLM SuperPro AI v1.0.1 (Native Android APK)"
           body: |
-            ### 🚀 FreeLLM SuperPro AI v1.0.0 (Native Android App)
+            ### 🚀 FreeLLM SuperPro AI v1.0.1 (Native Android App)
             - **Package**: `com.freellm.superpro`
+            - **Bug Fix**: Fixed duplicate prompt payload bug causing upstream LLM 400 error on questions like "Aaj Konsa din hai"
+            - **Bug Fix**: Added real-time temporal context (Current date & day of week)
+            - **Bug Fix**: Fixed Room DB race condition and enabled persistent error bubbles
+            - **UI Fix**: Added soft-keyboard IME padding so input bar floats smoothly above Gboard
             - **Ready for 1-Tap Install via MT Manager Canary (`bin.mt.plus.canary`)**
-            - **Native Jetpack Compose AMOLED UI**
-            - **DeepThink Reasoning with live streaming & timing**
-            - **Live Web Search & DuckDuckGo Citations**
-            - **Zero CORS Native Networking directly to Railway API**
-            - **Full Session History with Room SQLite DB**
-          files: apk_output/FreeLLM_SuperPro_v1.0.apk
+          files: apk_output/FreeLLM_SuperPro_v1.0.1.apk
           draft: false
           prerelease: false
